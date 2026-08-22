@@ -1,8 +1,15 @@
-// server.js - Complete Backend API for TeleBot Creator
+// server.js - Complete Backend for Render Deployment
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const admin = require('firebase-admin');
+
+// ==================== CONFIGURATION ====================
+const PORT = process.env.PORT || 3000;
+const BOT_TOKEN = process.env.BOT_TOKEN || '8790509172:AAHzEt3or9bHqj3NhvvVEd7FJgyi4hILnrs';
+const BOT_USERNAME = process.env.BOT_USERNAME || 'CoinXDrop_Bot';
+const CHANNEL_USERNAME = process.env.CHANNEL_USERNAME || 'https://t.me/Gigastreamm';
+const REFERRAL_BONUS = 1000;
 
 // ==================== FIREBASE INIT ====================
 let serviceAccount;
@@ -10,49 +17,54 @@ try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT) {
     const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT, 'base64').toString('utf8');
     serviceAccount = JSON.parse(decoded);
+    console.log('✅ Using encoded Firebase service account');
   } else {
     serviceAccount = require('./serviceAccountKey.json');
+    console.log('✅ Using local Firebase service account');
   }
 
   admin.initializeApp({
     credential: admin.credential.cert(serviceAccount),
-    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://your-project-default-rtdb.firebaseio.com"
+    databaseURL: process.env.FIREBASE_DATABASE_URL || "https://terabox-video-player-13c5a-default-rtdb.firebaseio.com"
   });
 
   console.log('🔥 Firebase initialized successfully');
 } catch (error) {
   console.error('❌ Firebase initialization error:', error);
-  process.exit(1);
 }
 
 const db = admin.database();
 
-// ==================== CONFIGURATION ====================
-const BOT_USERNAME = process.env.BOT_USERNAME || 'MineSimBot';
-const REFERRAL_BONUS = 1000;
-const PORT = process.env.PORT || 3000;
-
 // ==================== EXPRESS SERVER ====================
 const app = express();
 
-app.use(cors({
-  origin: '*',
-  credentials: true
-}));
+// Middleware
+app.use(cors({ origin: '*', credentials: true }));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
 // ==================== HELPER FUNCTIONS ====================
 async function getUserData(userId) {
-  const userRef = db.ref(`users/${userId}`);
-  const snapshot = await userRef.once('value');
-  return snapshot.val();
+  try {
+    const userRef = db.ref(`users/${userId}`);
+    const snapshot = await userRef.once('value');
+    return snapshot.val();
+  } catch (error) {
+    console.error('Get user error:', error);
+    return null;
+  }
 }
 
 async function updateUserData(userId, data) {
-  const userRef = db.ref(`users/${userId}`);
-  await userRef.update(data);
+  try {
+    const userRef = db.ref(`users/${userId}`);
+    await userRef.update(data);
+    return true;
+  } catch (error) {
+    console.error('Update user error:', error);
+    return false;
+  }
 }
 
 async function processReferral(referralCode, newUserId, username) {
@@ -99,14 +111,32 @@ async function processReferral(referralCode, newUserId, username) {
 
 // ==================== API ENDPOINTS ====================
 
-// Health check
+// Health Check - Required for Render
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'online',
     timestamp: Date.now(),
     bot: BOT_USERNAME,
+    botToken: BOT_TOKEN ? '✅ Set' : '❌ Not Set',
+    channel: CHANNEL_USERNAME ? '✅ Set' : '❌ Not Set',
+    firebase: db ? 'connected' : 'disconnected',
     version: '1.0.0'
   });
+});
+
+// Get Bot Config (for frontend)
+app.get('/api/config', (req, res) => {
+  res.json({
+    botUsername: BOT_USERNAME,
+    channelUsername: CHANNEL_USERNAME,
+    referralBonus: REFERRAL_BONUS,
+    botToken: BOT_TOKEN ? '✅ Set' : '❌ Not Set'
+  });
+});
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: './public' });
 });
 
 // 1. Register/Get User
@@ -267,7 +297,7 @@ app.get('/api/referral/stats/:userId', async (req, res) => {
 
     const referredUsers = userData.referredUsers || {};
     const referralCount = Object.keys(referredUsers).length;
-    const totalEarned = referralCount * 1000;
+    const totalEarned = referralCount * REFERRAL_BONUS;
 
     const recentReferrals = Object.entries(referredUsers)
       .sort((a, b) => b[1].timestamp - a[1].timestamp)
@@ -276,7 +306,7 @@ app.get('/api/referral/stats/:userId', async (req, res) => {
         userId: id,
         username: data.username || 'Anonymous',
         timestamp: data.timestamp,
-        bonusEarned: data.bonusEarned || 1000
+        bonusEarned: data.bonusEarned || REFERRAL_BONUS
       }));
 
     res.json({
@@ -286,7 +316,7 @@ app.get('/api/referral/stats/:userId', async (req, res) => {
       referralLink: `https://t.me/${BOT_USERNAME}?start=${userData.referralCode}`,
       totalEarnedFromReferrals: totalEarned,
       recentReferrals: recentReferrals,
-      bonusPerReferral: 1000,
+      bonusPerReferral: REFERRAL_BONUS,
       nextMilestone: {
         current: referralCount,
         next: Math.floor(referralCount / 5) * 5 + 5,
@@ -353,7 +383,7 @@ app.get('/api/stats/global', async (req, res) => {
         totalCoinsMined,
         totalReferrals,
         averageBalance: totalUsers > 0 ? Math.round(totalCoinsMined / totalUsers) : 0,
-        totalReferralBonus: totalReferrals * 1000
+        totalReferralBonus: totalReferrals * REFERRAL_BONUS
       }
     });
   } catch (error) {
@@ -362,40 +392,15 @@ app.get('/api/stats/global', async (req, res) => {
   }
 });
 
-// 7. Get User Data
-app.get('/api/user/:userId', async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const userData = await getUserData(userId);
-
-    if (!userData) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        userId: userId,
-        balance: userData.balance || 0,
-        totalMined: userData.totalMined || 0,
-        referralCount: userData.referralCount || 0,
-        referralCode: userData.referralCode,
-        registeredAt: userData.registeredAt,
-        lastSeen: userData.lastSeen
-      }
-    });
-  } catch (error) {
-    console.error('Get user error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // ==================== START SERVER ====================
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n🚀 Server running on port ${PORT}`);
   console.log(`🤖 Bot: @${BOT_USERNAME}`);
-  console.log(`📊 Firebase: Connected`);
-  console.log(`✅ API Ready!\n`);
+  console.log(`🔑 Bot Token: ${BOT_TOKEN ? '✅ Set' : '❌ Not Set'}`);
+  console.log(`📢 Channel: @${CHANNEL_USERNAME}`);
+  console.log(`📊 Firebase: ${db ? 'Connected' : 'Disconnected'}`);
+  console.log(`✅ API Ready at: http://localhost:${PORT}/api`);
+  console.log(`🌐 WebApp: http://localhost:${PORT}\n`);
 });
 
 // Error handling
