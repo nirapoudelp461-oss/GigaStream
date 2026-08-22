@@ -1,7 +1,7 @@
 {
   "name": "minesim-bot",
   "version": "1.0.0",
-  "description": "MineSim - Telegram Mining Bot",
+  "description": "MineSim - Telegram Mining Bot for Render",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
