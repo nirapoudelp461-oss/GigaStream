@@ -1,1 +1,150 @@
 
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rewarded Video Player</title>
+
+  <script src="https://libtl.com/sdk.js" data-zone="11806348" data-sdk="show_11806348"></script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: #0d0d12;
+      color: #fff;
+      font-family: Arial, sans-serif;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 700px;
+      background: #181820;
+      border-radius: 18px;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 22px;
+      margin: 0 0 20px;
+    }
+
+    .video-box {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+      background: #000;
+    }
+
+    video {
+      width: 100%;
+      display: block;
+      aspect-ratio: 16 / 9;
+      background: #000;
+    }
+
+    .watch-btn {
+      width: 100%;
+      margin-top: 20px;
+      padding: 16px;
+      border: none;
+      border-radius: 10px;
+      background: #9b5cff;
+      color: #fff;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .watch-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .status {
+      text-align: center;
+      margin-top: 14px;
+      color: #aaa;
+      font-size: 14px;
+    }
+
+    .error {
+      color: #ff7777;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>🎬 Watch Video</h1>
+
+    <div class="video-box">
+      <video id="videoPlayer" controls preload="metadata">
+        <source src="YOUR_VIDEO_URL.mp4" type="video/mp4">
+        Your browser does not support video playback.
+      </video>
+    </div>
+
+    <button class="watch-btn" id="watchBtn">
+      ▶ Watch Video
+    </button>
+
+    <div class="status" id="status">
+      Watch the advertisement to unlock the video.
+    </div>
+  </div>
+
+  <script>
+    const watchBtn = document.getElementById("watchBtn");
+    const videoPlayer = document.getElementById("videoPlayer");
+    const status = document.getElementById("status");
+
+    watchBtn.addEventListener("click", async () => {
+      watchBtn.disabled = true;
+      watchBtn.textContent = "Loading Advertisement...";
+      status.textContent = "Please watch the advertisement.";
+      status.classList.remove("error");
+
+      try {
+        if (typeof show_11806348 !== "function") {
+          throw new Error("Monetag SDK is not loaded.");
+        }
+
+        // Monetag Rewarded Popup
+        await show_11806348("pop");
+
+        // Start video after ad promise resolves.
+        status.textContent = "Advertisement completed! Starting video.";
+
+        await videoPlayer.play();
+
+        watchBtn.style.display = "none";
+
+      } catch (error) {
+        console.error("Monetag error:", error);
+
+        status.textContent =
+          "Advertisement failed or was closed. Please try again.";
+
+        status.classList.add("error");
+
+        watchBtn.disabled = false;
+        watchBtn.textContent = "▶ Watch Video";
+      }
+    });
+  </script>
+
+</body>
+</html>
